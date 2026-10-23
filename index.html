@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>単振動 × 等速円運動の射影 シミュレーター（iPad・プロジェクター対応）</title>
+  <style>
+    :root {
+      --bg-color: #f8fafc;
+      --card-bg: #ffffff;
+      --card-border: #cbd5e1;
+      --text-main: #0f172a;
+      --text-sub: #475569;
+      --accent: #0284c7;
+      --accent-light: #e0f2fe;
+      --spring-color: #334155;
+      --mass-color: #f59e0b;
+      --circle-color: #0284c7;
+      --shadow-line: #e11d48;
+      --vel-color: #059669;
+      --acc-color: #ea580c;
+      --force-color: #dc2626;
+      --canvas-bg: #ffffff;
+      --grid-line: #e2e8f0;
+      --axis-line: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden; /* スクロールなしで1画面に収める */
+      font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+      background: var(--bg-color);
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* トップヘッダー（iPadでも1画面に完全に収まるスリム設計） */
+    header {
+      background: var(--card-bg);
+      border-bottom: 2px solid var(--card-border);
+      padding: 2px 10px;
+      height: 38px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .title-area {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .title-area h1 {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: #0f172a;
+      letter-spacing: 0.02em;
+    }
+
+    .badge-sub {
+      font-size: 0.70rem;
+      background: var(--accent);
+      color: #fff;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-weight: 700;
+    }
+
+    /* クイックコントロールボタン群 */
+    .quick-controls {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    button.btn {
+      background: #ffffff;
+      color: var(--text-main);
+      border: 1.5px solid var(--card-border);
+      padding: 3px 8px;
+      border-radius: 5px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.1s ease;
+      touch-action: manipulation;
+    }
+
+    button.btn:active {
+      background: #f1f5f9;
+      transform: scale(0.98);
+    }
+
+    button.btn-primary {
+      background: var(--accent);
+      color: #ffffff;
+      border-color: var(--accent);
+      font-size: 0.85rem;
+      padding: 3px 12px;
+    }
+
+    button.btn-primary:active {
+      background: #0369a1;
+    }
+
+    /* メイン領域（100vhに完全収容） */
+    main {
+      flex: 1;
+      height: calc(100vh - 38px);
+      display: grid;
+      grid-template-columns: 1fr 315px;
+      gap: 8px;
+      padding: 3px 8px 3px 8px;
+      overflow: hidden;
+    }
+
+    /* 左側：キャンバス */
+    .viewport-card {
+      background: var(--card-bg);
+      border: 2px solid var(--card-border);
+      border-radius: 10px;
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      height: 100%;
+      min-height: 0;
+    }
+
+    .canvas-wrapper {
+      position: relative;
+      width: 100%;
+      flex: 1;
+      min-height: 0;
+      border-radius: 6px;
+      overflow: hidden;
+      background: var(--canvas-bg);
+      border: 1px solid #e2e8f0;
+    }
+
+    canvas#simCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* キャンバス上の物理量リアルタイムモニター */
+    .canvas-overlay-monitor {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(4px);
+      border: 2px solid var(--card-border);
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 0.95rem;
+      line-height: 1.45;
+      pointer-events: none;
+      color: #0f172a;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+
+    .val-highlight {
+      font-weight: 800;
+      color: var(--accent);
+    }
+
+    /* 右側：コントロール・情報パネル（iPadのSafari等でツールバーがあってもスクロールなしで収まる超コンパクト設計） */
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      height: 100%;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .panel-card {
+      background: var(--card-bg);
+      border: 1.5px solid var(--card-border);
+      border-radius: 7px;
+      padding: 2.5px 6px;
+      flex-shrink: 0;
+    }
+
+    .panel-card h2 {
+      font-size: 0.78rem;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 1px;
+      margin-bottom: 2px;
+      color: #1e293b;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* スライダーグループ */
+    .control-group {
+      margin-bottom: 2px;
+    }
+
+    .control-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .control-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 0px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: #334155;
+    }
+
+    .control-header .val-badge {
+      font-size: 0.88rem;
+      color: var(--accent);
+      font-family: 'Consolas', monospace;
+      font-weight: 800;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      height: 4px;
+      margin: 1px 0;
+      border-radius: 2px;
+      background: #cbd5e1;
+      outline: none;
+      cursor: pointer;
+      accent-color: var(--accent);
+    }
+
+    /* トグルボタン群 */
+    .toggle-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px;
+    }
+
+    .toggle-btn {
+      padding: 2.5px 4px;
+      font-size: 0.73rem;
+      font-weight: 700;
+      border: 1.5px solid var(--card-border);
+      border-radius: 5px;
+      background: #f8fafc;
+      color: var(--text-main);
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.1s;
+    }
+
+    .toggle-btn.active {
+      border-color: currentColor;
+      background: var(--accent-light);
+    }
+
+    .toggle-btn.t-vel { color: var(--vel-color); }
+    .toggle-btn.t-acc { color: var(--acc-color); }
+    .toggle-btn.t-force { color: var(--force-color); }
+    .toggle-btn.t-guide { color: #d97706; }
+    .toggle-btn.t-values { color: #0284c7; }
+
+    /* 物理量モニタ（計算結果） */
+    .physics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px;
+    }
+
+    .metric-box {
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      padding: 2px 2px;
+      text-align: center;
+    }
+
+    .metric-label {
+      font-size: 0.65rem;
+      color: var(--text-sub);
+      margin-bottom: 0px;
+      white-space: nowrap;
+    }
+
+    .metric-value {
+      font-size: 0.88rem;
+      font-family: 'Consolas', monospace;
+      font-weight: 800;
+      color: var(--accent);
+    }
+
+    .tip-box {
+      margin-top: 2px;
+      font-size: 0.66rem;
+      color: #334155;
+      line-height: 1.2;
+      background: #f8fafc;
+      padding: 2px 4px;
+      border-radius: 4px;
+      border-left: 3px solid var(--accent);
+    }
+
+    /* 授業の問いかけカード */
+    .question-card {
+      background: #f0f9ff;
+      border: 1.5px solid #bae6fd;
+      padding: 2.5px 6px;
+    }
+    .question-card h2 {
+      color: #0369a1;
+      border-bottom: 1px solid #bae6fd;
+      font-size: 0.78rem;
+      margin-bottom: 2px;
+      padding-bottom: 1px;
+    }
+    .question-text {
+      font-size: 0.69rem;
+      color: #0c4a6e;
+      line-height: 1.25;
+      font-weight: 500;
+    }
+    .question-text strong {
+      color: #0284c7;
+      font-weight: 800;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- トップヘッダー -->
+  <header>
+    <div class="title-area">
+      <h1>単振動 × 等速円運動の射影</h1>
+      <span class="badge-sub">高校物理 実演シミュレーター</span>
+    </div>
+
+    <div class="quick-controls">
+      <button id="btnPlay" class="btn btn-primary" title="スペースキーでも操作可能">
+        <span id="playIcon">⏸</span> <span id="playText">一時停止</span>
+      </button>
+      <button id="btnStep" class="btn" title="1コマ進む">⏭ コマ送り</button>
+      <button id="btnSpeed" class="btn">🐢 <span id="speedVal">1.0x</span></button>
+      <button id="btnReset" class="btn">↺ リセット</button>
+    </div>
+  </header>
+
+  <!-- メイン領域 -->
+  <main>
+    <!-- 左側：キャンバス -->
+    <div class="viewport-card">
+      <div class="canvas-wrapper" id="canvasWrapper">
+        <canvas id="simCanvas"></canvas>
+        <div class="canvas-overlay-monitor">
+          <div>時刻 <span class="val-highlight">t = <span id="dispT">0.00</span> s</span></div>
+          <div>角速度 <span class="val-highlight">ω = <span id="dispOmega">2.00</span> rad/s</span></div>
+          <div>回転角 <span class="val-highlight">ωt = <span id="dispTheta">0.00</span> rad</span> (<span id="dispDeg">0°</span>)</div>
+          <div>変位 <span class="val-highlight">x = <span id="dispX">+0.000</span> m</span></div>
+          <div>速度 <span class="val-highlight">v = <span id="dispV">+0.00</span> m/s</span></div>
+          <div>加速度 <span class="val-highlight">a = <span id="dispA">+0.0</span> m/s²</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右側：サイドバー -->
+    <div class="sidebar">
+      
+      <!-- パラメータ調整 -->
+      <div class="panel-card">
+        <h2>🛠 パラメータ調整</h2>
+        
+        <div class="control-group">
+          <div class="control-header">
+            <span>振幅 A（円の半径）</span>
+            <span class="val-badge"><span id="valA">0.15</span> m</span>
+          </div>
+          <input type="range" id="sliderA" min="0.05" max="0.25" step="0.01" value="0.15">
+          <div style="margin-top: 2px; display: flex; gap: 4px;">
+            <button class="btn" style="flex:1; font-size:0.75rem; padding:2px 4px;" id="btnPresetA1">小 (0.08m)</button>
+            <button class="btn" style="flex:1; font-size:0.75rem; padding:2px 4px;" id="btnPresetA2">中 (0.15m)</button>
+            <button class="btn" style="flex:1; font-size:0.75rem; padding:2px 4px;" id="btnPresetA3">大 (0.22m)</button>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <div class="control-header">
+            <span>ばね定数 k</span>
+            <span class="val-badge"><span id="valK">4.0</span> N/m</span>
+          </div>
+          <input type="range" id="sliderK" min="1.0" max="16.0" step="0.5" value="4.0">
+        </div>
+
+        <div class="control-group">
+          <div class="control-header">
+            <span>おもりの質量 m</span>
+            <span class="val-badge"><span id="valM">1.00</span> kg</span>
+          </div>
+          <input type="range" id="sliderM" min="0.50" max="3.00" step="0.10" value="1.00">
+        </div>
+      </div>
+
+      <!-- ベクトル表示トグル -->
+      <div class="panel-card">
+        <h2>👁 表示切替</h2>
+        <div class="toggle-grid">
+          <button class="toggle-btn t-guide active" id="togGuide">🔦 射影ガイド線</button>
+          <button class="toggle-btn t-vel" id="togVel">🟩 速度ベクトル v</button>
+          <button class="toggle-btn t-acc" id="togAcc">🟧 加速度ベクトル a</button>
+          <button class="toggle-btn t-force" id="togForce">🟥 復元力 F = -kx</button>
+        </div>
+      </div>
+
+      <!-- 授業の問いかけカード（表示切替と計算される物理量のあいだに配置） -->
+      <div class="panel-card question-card">
+        <h2>🤔 考えてみよう（問い）</h2>
+        <div class="question-text">
+          単振動の<strong>変位 x</strong>、<strong>速度 v</strong>、<strong>加速度 a</strong> は、振幅 <strong>A</strong>、角速度 <strong>ω</strong>、時刻 <strong>t</strong> を使ってどのように表されるだろうか？
+        </div>
+      </div>
+
+      <!-- 諸元計算値 -->
+      <div class="panel-card">
+        <h2>📊 計算される物理量</h2>
+        <div class="physics-grid">
+          <div class="metric-box">
+            <div class="metric-label">角振動数 ω = √(k/m)</div>
+            <div class="metric-value"><span id="calcOmega">2.00</span> <span style="font-size:0.65rem;">rad/s</span></div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">周期 T = 2π/ω</div>
+            <div class="metric-value"><span id="calcT">3.14</span> <span style="font-size:0.65rem;">s</span></div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">最大速度 vmax = Aω</div>
+            <div class="metric-value"><span id="calcVmax">0.30</span> <span style="font-size:0.65rem;">m/s</span></div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">最大加速度 amax = Aω²</div>
+            <div class="metric-value"><span id="calcAmax">0.60</span> <span style="font-size:0.65rem;">m/s²</span></div>
+          </div>
+        </div>
+
+        <div class="tip-box">
+          💡 <strong>等時性：</strong>振幅 A を変えても周期 T は不変（上の小・中・大で演示可）
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    // --- 状態管理（初期周期を約3.14秒に設定して観察しやすく） ---
+    const state = {
+      // 物理パラメータ
+      A: 0.15,      // 振幅 [m]
+      k: 4.0,       // ばね定数 [N/m]
+      m: 1.00,      // 質量 [kg]
+      
+      // 計算プロパティ: ω = √(4/1) = 2.0 rad/s, T = 2π/2 = 3.14 s
+      omega: 2.00,  // 角振動数 [rad/s]
+      T: 3.14,      // 周期 [s]
+      
+      // アニメーション状態
+      isPlaying: true,
+      simTime: 0.0,
+      timeScale: 1.0, // 再生倍率 (1.0, 0.5, 0.25)
+      
+      // 表示トグル（初期状態は射影ガイド線のみON）
+      showGuide: true,
+      showVel: false,
+      showAcc: false,
+      showForce: false
+    };
+
+    // --- DOM要素 ---
+    const canvas = document.getElementById('simCanvas');
+    const ctx = canvas.getContext('2d');
+    const canvasWrapper = document.getElementById('canvasWrapper');
+
+    const sliderA = document.getElementById('sliderA');
+    const sliderK = document.getElementById('sliderK');
+    const sliderM = document.getElementById('sliderM');
+    const valA = document.getElementById('valA');
+    const valK = document.getElementById('valK');
+    const valM = document.getElementById('valM');
+
+    const calcOmega = document.getElementById('calcOmega');
+    const calcT = document.getElementById('calcT');
+    const calcVmax = document.getElementById('calcVmax');
+    const calcAmax = document.getElementById('calcAmax');
+
+    const dispT = document.getElementById('dispT');
+    const dispOmega = document.getElementById('dispOmega');
+    const dispTheta = document.getElementById('dispTheta');
+    const dispDeg = document.getElementById('dispDeg');
+    const dispX = document.getElementById('dispX');
+    const dispV = document.getElementById('dispV');
+    const dispA = document.getElementById('dispA');
+
+    const btnPlay = document.getElementById('btnPlay');
+    const playIcon = document.getElementById('playIcon');
+    const playText = document.getElementById('playText');
+    const btnStep = document.getElementById('btnStep');
+    const btnSpeed = document.getElementById('btnSpeed');
+    const speedVal = document.getElementById('speedVal');
+    const btnReset = document.getElementById('btnReset');
+
+    const togGuide = document.getElementById('togGuide');
+    const togVel = document.getElementById('togVel');
+    const togAcc = document.getElementById('togAcc');
+    const togForce = document.getElementById('togForce');
+
+    // --- 物理パラメータの更新 ---
+    function updatePhysicsConstants() {
+      state.A = parseFloat(sliderA.value);
+      state.k = parseFloat(sliderK.value);
+      state.m = parseFloat(sliderM.value);
+
+      state.omega = Math.sqrt(state.k / state.m);
+      state.T = (2 * Math.PI) / state.omega;
+
+      valA.textContent = state.A.toFixed(2);
+      valK.textContent = state.k.toFixed(1);
+      valM.textContent = state.m.toFixed(2);
+
+      calcOmega.textContent = state.omega.toFixed(2);
+      calcT.textContent = state.T.toFixed(2);
+      calcVmax.textContent = (state.A * state.omega).toFixed(2);
+      calcAmax.textContent = (state.A * state.omega * state.omega).toFixed(2);
+      dispOmega.textContent = state.omega.toFixed(2);
+    }
+
+    sliderA.addEventListener('input', updatePhysicsConstants);
+    sliderK.addEventListener('input', updatePhysicsConstants);
+    sliderM.addEventListener('input', updatePhysicsConstants);
+
+    // 振幅プリセット
+    document.getElementById('btnPresetA1').addEventListener('click', () => {
+      sliderA.value = 0.08;
+      updatePhysicsConstants();
+    });
+    document.getElementById('btnPresetA2').addEventListener('click', () => {
+      sliderA.value = 0.15;
+      updatePhysicsConstants();
+    });
+    document.getElementById('btnPresetA3').addEventListener('click', () => {
+      sliderA.value = 0.22;
+      updatePhysicsConstants();
+    });
+
+    // --- 高解像度キャンバスリサイズ ---
+    let width = 0;
+    let height = 0;
+    let dpr = 1;
+
+    function resizeCanvas() {
+      dpr = window.devicePixelRatio || 1;
+      width = canvasWrapper.clientWidth;
+      height = canvasWrapper.clientHeight;
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      ctx.setTransform(1, 0, 0, 1, 0, 0); // リセット
+      ctx.scale(dpr, dpr);
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    // --- 再生制御 ---
+    function togglePlay() {
+      state.isPlaying = !state.isPlaying;
+      if (state.isPlaying) {
+        playIcon.textContent = '⏸';
+        playText.textContent = '一時停止';
+        btnPlay.classList.add('btn-primary');
+      } else {
+        playIcon.textContent = '▶';
+        playText.textContent = '再生';
+        btnPlay.classList.remove('btn-primary');
+      }
+    }
+
+    btnPlay.addEventListener('click', togglePlay);
+
+    btnStep.addEventListener('click', () => {
+      state.isPlaying = false;
+      playIcon.textContent = '▶';
+      playText.textContent = '再生';
+      btnPlay.classList.remove('btn-primary');
+      state.simTime += 0.030; // 1コマ進む
+    });
+
+    const speeds = [1.0, 0.5, 0.25];
+    let speedIndex = 0;
+    btnSpeed.addEventListener('click', () => {
+      speedIndex = (speedIndex + 1) % speeds.length;
+      state.timeScale = speeds[speedIndex];
+      speedVal.textContent = state.timeScale + 'x';
+    });
+
+    btnReset.addEventListener('click', () => {
+      state.simTime = 0.0;
+    });
+
+    // トグルボタン
+    function setupToggle(btn, prop) {
+      btn.addEventListener('click', () => {
+        state[prop] = !state[prop];
+        btn.classList.toggle('active', state[prop]);
+      });
+    }
+    setupToggle(togGuide, 'showGuide');
+    setupToggle(togVel, 'showVel');
+    setupToggle(togAcc, 'showAcc');
+    setupToggle(togForce, 'showForce');
+
+    // キーボードショートカット
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        togglePlay();
+      } else if (e.code === 'ArrowRight') {
+        e.preventDefault();
+        btnStep.click();
+      } else if (e.code === 'KeyR') {
+        btnReset.click();
+      }
+    });
+
+    // --- 描画ヘルパー：先端に余分な点が出ないクリーンな矢印 ---
+    function drawArrow(ctx, fromX, fromY, toX, toY, color, width = 4, headLen = 14) {
+      const dx = toX - fromX;
+      const dy = toY - fromY;
+      const len = Math.hypot(dx, dy);
+      if (len < 2) return;
+
+      const angle = Math.atan2(dy, dx);
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineCap = 'butt';
+      ctx.lineJoin = 'miter';
+
+      // 矢の軸線（矢尻の底まで描くことで先端の飛び出しを防ぐ）
+      const shaftLen = Math.max(0, len - headLen * 0.7);
+      ctx.beginPath();
+      ctx.moveTo(fromX, fromY);
+      ctx.lineTo(fromX + shaftLen * Math.cos(angle), fromY + shaftLen * Math.sin(angle));
+      ctx.stroke();
+
+      // 矢尻（シャープな三角形）
+      ctx.beginPath();
+      ctx.moveTo(toX, toY);
+      ctx.lineTo(toX - headLen * Math.cos(angle - Math.PI / 6), toY - headLen * Math.sin(angle - Math.PI / 6));
+      ctx.lineTo(toX - headLen * Math.cos(angle + Math.PI / 6), toY - headLen * Math.sin(angle + Math.PI / 6));
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // コイルばね描画
+    function drawSpring(ctx, startX, startY, endX, endY, coils = 14, radius = 16, color = '#334155') {
+      const dx = endX - startX;
+      const dy = endY - startY;
+      const len = Math.hypot(dx, dy);
+      const angle = Math.atan2(dy, dx);
+
+      ctx.save();
+      ctx.translate(startX, startY);
+      ctx.rotate(angle);
+
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3.2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+
+      const leadIn = 22;
+      const leadOut = 18;
+      const springLen = Math.max(10, len - leadIn - leadOut);
+
+      ctx.moveTo(0, 0);
+      ctx.lineTo(leadIn, 0);
+
+      const step = springLen / coils;
+      for (let i = 0; i < coils; i++) {
+        const x1 = leadIn + step * (i + 0.25);
+        const y1 = -radius;
+        const x2 = leadIn + step * (i + 0.75);
+        const y2 = radius;
+        const x3 = leadIn + step * (i + 1.0);
+        const y3 = 0;
+        ctx.lineTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.lineTo(x3, y3);
+      }
+
+      ctx.lineTo(len, 0);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // --- メインアニメーションループ ---
+    let lastTimestamp = 0;
+
+    function animate(timestamp) {
+      if (!lastTimestamp) lastTimestamp = timestamp;
+      const dt = Math.min((timestamp - lastTimestamp) / 1000, 0.1);
+      lastTimestamp = timestamp;
+
+      if (state.isPlaying) {
+        state.simTime += dt * state.timeScale;
+      }
+
+      // 等速円運動の厳密な進行： theta = omega * simTime
+      const theta = state.omega * state.simTime;
+      const thetaMod = theta % (2 * Math.PI);
+      const degMod = Math.round((thetaMod * 180 / Math.PI));
+
+      // 物理量の計算（t=0 で中心 x=0 から正の向きへ： x = A sin(ωt)）
+      const xVal = state.A * Math.sin(theta);
+      const vVal = state.A * state.omega * Math.cos(theta);
+      const aVal = -state.omega * state.omega * xVal;
+
+      // モニター数値の更新
+      dispT.textContent = state.simTime.toFixed(2);
+      dispTheta.textContent = (thetaMod).toFixed(2);
+      dispDeg.textContent = degMod + '°';
+      dispX.textContent = (xVal >= 0 ? '+' : '') + xVal.toFixed(3);
+      dispV.textContent = (vVal >= 0 ? '+' : '') + vVal.toFixed(2);
+      dispA.textContent = (aVal >= 0 ? '+' : '') + aVal.toFixed(2);
+
+      // --- 描画処理 ---
+      ctx.clearRect(0, 0, width, height);
+
+      // 定数カラー（ホワイトボード専用・高コントラスト）
+      const colSpring = '#334155';
+      const colMass = '#f59e0b';
+      const colCircle = '#0284c7';
+      const colShadow = '#e11d48';
+      const colVel = '#059669';
+      const colAcc = '#ea580c';
+      const colForce = '#dc2626';
+      const colGrid = '#e2e8f0';
+      const colAxis = '#94a3b8';
+      const textMain = '#0f172a';
+
+      // レイアウト座標（iPadの画面比率で上下に美しく配置）
+      const centerX = width * 0.48; // 中心x座標
+      const scale = Math.min(width * 0.32, 165) / 0.25; // 描画スケール
+      const radiusPx = state.A * scale;
+
+      const circleCenterY = height * 0.27;  // 円運動の中心Y
+      const springCenterY = height * 0.70;  // ばねの振動中心Y
+
+      // 1. 背景グリッドと中心基準線の描画
+      ctx.strokeStyle = colGrid;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      // 水平軸
+      ctx.moveTo(0, circleCenterY); ctx.lineTo(width, circleCenterY);
+      ctx.moveTo(0, springCenterY); ctx.lineTo(width, springCenterY);
+      ctx.stroke();
+
+      // 中心線（x = 0）
+      ctx.strokeStyle = colAxis;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      ctx.moveTo(centerX, circleCenterY - radiusPx - 25);
+      ctx.lineTo(centerX, springCenterY + 88);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // 振動中心ラベル（ベクトルのさらに下に配置して被りゼロ）
+      ctx.fillStyle = textMain;
+      ctx.font = 'bold 12px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('振動中心 (x = 0)', centerX, springCenterY + 84);
+
+      // 両端の線（x = ±A）
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(centerX + radiusPx, circleCenterY - radiusPx - 10);
+      ctx.lineTo(centerX + radiusPx, springCenterY + 88);
+      ctx.moveTo(centerX - radiusPx, circleCenterY - radiusPx - 10);
+      ctx.lineTo(centerX - radiusPx, springCenterY + 88);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.font = 'bold 11px sans-serif';
+      ctx.fillStyle = '#64748b';
+      ctx.fillText('+A', centerX + radiusPx, springCenterY + 76);
+      ctx.fillText('-A', centerX - radiusPx, springCenterY + 76);
+
+      // ==========================================
+      // A. 上部：等速円運動の描画
+      // ==========================================
+      // 円軌道
+      ctx.strokeStyle = colCircle;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(centerX, circleCenterY, radiusPx, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // 初期位置 t=0 のマーキング（最下点）
+      const initX = centerX;
+      const initY = circleCenterY + radiusPx;
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#0284c7';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(initX, initY, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // 「t=0」の表記（▶を削除し、円弧と被らないよう最下点の下に少し離して配置）
+      ctx.fillStyle = '#0284c7';
+      ctx.font = 'bold 13px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('t = 0', initX, initY + 18);
+
+      // t=0 の基準動径（最下点への縦破線）
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(centerX, circleCenterY);
+      ctx.lineTo(initX, initY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // 現在の円運動の物体の位置：反時計回りに回転
+      const pX = centerX + radiusPx * Math.sin(theta);
+      const pY = circleCenterY + radiusPx * Math.cos(theta);
+
+      // 現在の動径ベクトル
+      ctx.strokeStyle = colCircle;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(centerX, circleCenterY);
+      ctx.lineTo(pX, pY);
+      ctx.stroke();
+
+      // ★回転角 ωt の扇形とアーク（[rad]は削除）
+      const startAngle = Math.PI / 2;
+      const endAngle = Math.PI / 2 - thetaMod;
+      const arcRadius = Math.min(radiusPx * 0.48, 40);
+      
+      // 扇形の半透明塗り
+      ctx.fillStyle = 'rgba(2, 132, 199, 0.12)';
+      ctx.beginPath();
+      ctx.moveTo(centerX, circleCenterY);
+      ctx.arc(centerX, circleCenterY, arcRadius, startAngle, endAngle, true);
+      ctx.closePath();
+      ctx.fill();
+
+      // 角度アーク
+      ctx.strokeStyle = '#0284c7';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(centerX, circleCenterY, arcRadius, startAngle, endAngle, true);
+      ctx.stroke();
+
+      // 「ωt」の文字（扇形の中央に大きく明記）
+      const midAngle = startAngle - thetaMod * 0.5;
+      const textArcR = arcRadius * 0.65;
+      const arcTextX = centerX + textArcR * Math.cos(midAngle);
+      const arcTextY = circleCenterY + textArcR * Math.sin(midAngle);
+      
+      ctx.fillStyle = '#0284c7';
+      ctx.font = 'bold 15px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('ωt', arcTextX, arcTextY + 5);
+
+      // 円運動の物体（点Pという言葉は削除し、球のみ描画）
+      const ballRadius = 13;
+      ctx.fillStyle = colCircle;
+      ctx.beginPath();
+      ctx.arc(pX, pY, ballRadius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      // --- 円運動のベクトル（接線・向心、および始点をそろえた水平射影） ---
+      const vecLenBase = 72; // ベクトル描画基準長
+
+      // 1. 等速円運動の速度ベクトル（接線方向：v0 = rω）および水平射影（v）
+      if (state.showVel) {
+        const vx = vecLenBase * Math.cos(theta);
+        const vy = -vecLenBase * Math.sin(theta);
+
+        // 接線速度ベクトル（斜め）：円運動の速度 v0 = rω
+        drawArrow(ctx, pX, pY, pX + vx, pY + vy, colVel, 4.5, 14);
+        ctx.fillStyle = colVel;
+        ctx.font = 'bold 15px sans-serif';
+        ctx.textAlign = vx >= 0 ? 'left' : 'right';
+        ctx.fillText('v₀ = Aω', pX + vx + (vx >= 0 ? 12 : -12), pY + vy + (vy >= 0 ? 12 : -12));
+
+        // ★射影の矢印：等速円運動の速度ベクトルと「始点をそろえて」物体(pX, pY)から水平に描画！
+        drawArrow(ctx, pX, pY, pX + vx, pY, colVel, 4, 13);
+
+        // ベクトル先端同士を結ぶ垂線（直角三角形の分解線）
+        ctx.strokeStyle = 'rgba(5, 150, 105, 0.45)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(pX + vx, pY + vy);
+        ctx.lineTo(pX + vx, pY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // 単振動（射影）の速度記号「v」（円運動の v0 と明確に区別！）
+        ctx.fillStyle = colVel;
+        ctx.font = 'bold 15px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('v', pX + vx * 0.5, pY - (vy < 0 ? -16 : 10));
+      }
+
+      // 2. 等速円運動の加速度ベクトル（向心方向：a0 = rω²）および水平射影（a）
+      if (state.showAcc) {
+        const ax = -vecLenBase * Math.sin(theta);
+        const ay = -vecLenBase * Math.cos(theta);
+
+        // 向心加速度ベクトル（斜め）：円運動の加速度 a0 = rω²
+        drawArrow(ctx, pX, pY, pX + ax, pY + ay, colAcc, 4.5, 14);
+        ctx.fillStyle = colAcc;
+        ctx.font = 'bold 15px sans-serif';
+        ctx.textAlign = ax >= 0 ? 'left' : 'right';
+        ctx.fillText('a₀ = Aω²', pX + ax + (ax >= 0 ? 12 : -12), pY + ay + (ay >= 0 ? 12 : -12));
+
+        // ★射影の矢印：等速円運動の加速度ベクトルと「始点をそろえて」物体(pX, pY)から水平に描画！
+        drawArrow(ctx, pX, pY, pX + ax, pY, colAcc, 4, 13);
+
+        // ベクトル先端同士を結ぶ垂線（直角三角形の分解線）
+        ctx.strokeStyle = 'rgba(234, 88, 12, 0.45)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(pX + ax, pY + ay);
+        ctx.lineTo(pX + ax, pY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // 単振動（射影）の加速度記号「a」（円運動の a0 と明確に区別！）
+        ctx.fillStyle = colAcc;
+        ctx.font = 'bold 15px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('a', pX + ax * 0.5, pY + (ay > 0 ? -10 : 18));
+      }
+
+      // ==========================================
+      // B. 中央：射影ガイド線（垂直点線のみ！）
+      // ==========================================
+      if (state.showGuide) {
+        ctx.save();
+        ctx.strokeStyle = colShadow;
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([5, 5]);
+
+        // 点Pから単振動の物体まで垂直にまっすぐ結ぶ点線のみ
+        ctx.beginPath();
+        ctx.moveTo(pX, pY + ballRadius);
+        ctx.lineTo(pX, springCenterY - ballRadius);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // ==========================================
+      // C. 下部：単振動（ばね振り子）の描画
+      // ==========================================
+      const wallX = centerX - Math.min(width * 0.38, 250); // 固定壁のX位置
+      const massX = pX; // 水平位置は円運動の物体と完全に一致！
+
+      // 床面（球の底面に接する）
+      ctx.strokeStyle = colAxis;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(wallX - 10, springCenterY + ballRadius);
+      ctx.lineTo(centerX + radiusPx + 70, springCenterY + ballRadius);
+      ctx.stroke();
+
+      // なめらかな床のハッチング
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 1.2;
+      for (let hx = wallX; hx < centerX + radiusPx + 70; hx += 20) {
+        ctx.beginPath();
+        ctx.moveTo(hx, springCenterY + ballRadius);
+        ctx.lineTo(hx - 8, springCenterY + ballRadius + 9);
+        ctx.stroke();
+      }
+
+      // 固定壁
+      ctx.fillStyle = '#e2e8f0';
+      ctx.fillRect(wallX - 20, springCenterY - 35, 20, 70);
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(wallX, springCenterY - 35);
+      ctx.lineTo(wallX, springCenterY + 35);
+      ctx.stroke();
+
+      // コイルばね描画（壁から球の左端まで）
+      drawSpring(ctx, wallX, springCenterY, massX - ballRadius, springCenterY, 14, 15, colSpring);
+
+      // ★単振動の物体：点Pと同じ「球」にする！
+      ctx.fillStyle = colMass;
+      ctx.beginPath();
+      ctx.arc(massX, springCenterY, ballRadius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      // --- 単振動の物体のベクトル表示（数値なし、記号を大きく配置） ---
+      // 1. 単振動の速度ベクトル v（球の上部に表示）
+      if (state.showVel) {
+        const vxPx = (vVal / (state.A * state.omega)) * vecLenBase;
+        if (Math.abs(vxPx) > 3) {
+          drawArrow(ctx, massX, springCenterY - 24, massX + vxPx, springCenterY - 24, colVel, 4, 12);
+          ctx.fillStyle = colVel;
+          ctx.font = 'bold 15px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('v', massX + vxPx * 0.5, springCenterY - 31);
+        }
+      }
+
+      // ★加速度と復元力は比例関係 (F = ma, F = -kx, a = -(k/m)x)
+      // 矢印の長さと伸縮を完全に同期させて比例関係を視覚化！
+      const propLen = (-xVal / state.A) * vecLenBase;
+
+      // 2. 復元力ベクトル F = -kx（球の直下に表示）
+      if (state.showForce) {
+        if (Math.abs(propLen) > 3) {
+          drawArrow(ctx, massX, springCenterY + 26, massX + propLen, springCenterY + 26, colForce, 4, 13);
+          ctx.fillStyle = colForce;
+          ctx.font = 'bold 15px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('F = -kx', massX + propLen * 0.5, springCenterY + 41);
+        }
+      }
+
+      // 3. 単振動の加速度ベクトル a（復元力の下に並べて表示：Fと全く同じ長さ・比率で完全同期！）
+      if (state.showAcc) {
+        if (Math.abs(propLen) > 3) {
+          drawArrow(ctx, massX, springCenterY + 50, massX + propLen, springCenterY + 50, colAcc, 4, 13);
+          ctx.fillStyle = colAcc;
+          ctx.font = 'bold 15px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('a', massX + propLen * 0.5, springCenterY + 65);
+        }
+      }
+
+      // セクション見出しラベル
+      ctx.textAlign = 'left';
+      ctx.fillStyle = colCircle;
+      ctx.font = 'bold 16px sans-serif';
+      ctx.fillText('【① 等速円運動】', 18, 28);
+
+      ctx.fillStyle = '#d97706';
+      ctx.fillText('【② 単振動（ばね振り子）】', 18, springCenterY - 55);
+
+      requestAnimationFrame(animate);
+    }
+
+    // 初期化実行
+    window.addEventListener('load', () => {
+      resizeCanvas();
+      updatePhysicsConstants();
+      requestAnimationFrame(animate);
+    });
+  </script>
+</body>
+</html>
